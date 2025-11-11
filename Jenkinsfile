@@ -27,11 +27,12 @@ pipeline {
         stage('Docker Build and Push') {
             steps {
                 withCredentials([usernamePassword(credentialsId: 'docker-hub-cred', 
-                                          usernameVariable: 'DOCKER_USER', 
-                                          passwordVariable: 'DOCKER_PASS')]) {
-            sh 'echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin'
-            sh 'docker build -t shaikh7/numeric-app:${GIT_COMMIT} .'
-            sh 'docker push shaikh7/numeric-app:${GIT_COMMIT}'
+                                                 usernameVariable: 'DOCKER_USER', 
+                                                 passwordVariable: 'DOCKER_PASS')]) {
+                    sh 'echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin'
+                    sh 'docker build -t shaikh7/numeric-app:${GIT_COMMIT} .'
+                    sh 'docker push shaikh7/numeric-app:${GIT_COMMIT}'
+                }
             }
         }
     }
