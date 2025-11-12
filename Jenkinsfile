@@ -3,6 +3,7 @@ pipeline {
 
     environment {
         IMAGE_NAME = "shaikh7/numeric-app"
+        DOCKER_BUILDKIT = "0" // disable BuildKit to avoid Buildx missing error
     }
 
     stages {
@@ -45,7 +46,6 @@ pipeline {
             steps {
                 parallel(
                     "Dependency Scan": {
-                        // catch network issues to avoid pipeline failure
                         catchError(buildResult: 'SUCCESS', stageResult: 'UNSTABLE') {
                             sh "mvn dependency-check:check"
                         }
@@ -54,11 +54,10 @@ pipeline {
                         sh "bash trivy-docker-image-scan.sh"
                     },
                     "OPA Conftest": {
-                       sh '''
-                        docker run --rm -v $(pwd):/project openpolicyagent/conftest:v0.33.0 \
-                       test --policy opa-docker-security.rego Dockerfile
-                       '''
-
+                        sh '''
+                            docker run --rm -v $(pwd):/project openpolicyagent/conftest:v0.33.0 \
+                            test --policy opa-docker-security.rego Dockerfile
+                        '''
                     }
                 )
             }
@@ -74,8 +73,9 @@ pipeline {
                     )
                 ]) {
                     sh '''
+                        export DOCKER_BUILDKIT=0
                         echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin
-                        docker build -t ${IMAGE_NAME}:${GIT_COMMIT} .
+                        docker build -t ${IMAGE_NAME}:${GIT_COMMIT} --build-arg JAR_FILE=target/*.jar .
                         docker push ${IMAGE_NAME}:${GIT_COMMIT}
                     '''
                 }
@@ -94,19 +94,19 @@ pipeline {
         }
     }
 
-  post {
-    always {
-        junit 'target/surefire-reports/*.xml'
-        jacoco execPattern: 'target/jacoco.exec'
-        pitmutation mutationStatsFile: '**/target/pit-reports/**/mutations.xml'
+    post {
+        always {
+            junit 'target/surefire-reports/*.xml'
+            jacoco execPattern: 'target/jacoco.exec'
+            pitmutation mutationStatsFile: '**/target/pit-reports/**/mutations.xml'
 
-        script {
-            try {
-                dependencyCheckPublisher pattern: 'target/dependency-check-report.xml'
-            } catch (err) {
-                echo "Dependency-Check report not found or failed: ${err}"
+            script {
+                try {
+                    dependencyCheckPublisher pattern: 'target/dependency-check-report.xml'
+                } catch (err) {
+                    echo "Dependency-Check report not found or failed: ${err}"
+                }
             }
         }
     }
-}
 }
