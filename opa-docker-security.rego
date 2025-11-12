@@ -1,7 +1,9 @@
 package main
 
-# Do not store secrets in ENV variables
-secrets_env = {
+# ==========================
+# Secrets in ENV variables
+# ==========================
+secrets_env = [
     "passwd",
     "password",
     "pass",
@@ -12,30 +14,29 @@ secrets_env = {
     "apikey",
     "token",
     "tkn"
-}
+]
 
-deny[msg] {
-    some i
+deny[msg] {    
     input[i].Cmd == "env"
-    val := lower(input[i].Value)
-    secret := secrets_env[_]
-    contains(val, secret)
-    msg = sprintf("Line %d: Potential secret in ENV key found: %s", [i, input[i].Value])
+    val := input[i].Value
+    contains(lower(val[_]), secrets_env[_])
+    msg = sprintf("Line %d: Potential secret in ENV key found: %s", [i, val])
 }
 
-# Do not use 'latest' tag for base image
+# ==========================
+# Avoid 'latest' tag for base images
+# ==========================
 deny[msg] {
-    some i
     input[i].Cmd == "from"
     val := split(input[i].Value[0], ":")
-    count(val) > 1
     contains(lower(val[1]), "latest")
     msg = sprintf("Line %d: do not use 'latest' tag for base images", [i])
 }
 
-# Avoid curl or wget piping to shell
+# ==========================
+# Avoid curl/wget bashing
+# ==========================
 deny[msg] {
-    some i
     input[i].Cmd == "run"
     val := concat(" ", input[i].Value)
     matches := regex.find_n("(curl|wget)[^|^>]*[|>]", lower(val), -1)
@@ -43,55 +44,57 @@ deny[msg] {
     msg = sprintf("Line %d: Avoid curl bashing", [i])
 }
 
+# ==========================
 # Do not upgrade system packages
-upgrade_commands = {
+# ==========================
+upgrade_commands = [
     "apk upgrade",
     "apt-get upgrade",
-    "dist-upgrade"
-}
+    "dist-upgrade",
+]
 
 deny[msg] {
-    some i
     input[i].Cmd == "run"
     val := concat(" ", input[i].Value)
-    command := upgrade_commands[_]
-    contains(val, command)
+    contains(val, upgrade_commands[_])
     msg = sprintf("Line %d: Do not upgrade your system packages", [i])
 }
 
-# Do not use ADD, use COPY
+# ==========================
+# Avoid ADD
+# ==========================
 deny[msg] {
-    some i
     input[i].Cmd == "add"
     msg = sprintf("Line %d: Use COPY instead of ADD", [i])
 }
 
-# Must specify a user
+# ==========================
+# Must specify a non-root USER
+# ==========================
+# Deny if no USER command exists
 deny[msg] {
-    not some i
-    input[i].Cmd == "user"
+    count([i | input[i].Cmd == "user"]) == 0
     msg = "Do not run as root, use USER instead"
 }
 
-# Do not run as forbidden users
-forbidden_users = {
+# Forbidden users
+forbidden_users = [
     "root",
     "toor",
     "0"
-}
+]
 
 deny[msg] {
-    some i
     input[i].Cmd == "user"
-    val := lower(input[i].Value)
-    forbidden := forbidden_users[_]
-    contains(val, forbidden)
-    msg = sprintf("Line %d: Do not run as root: %s", [i, input[i].Value])
+    val := input[i].Value
+    contains(lower(val[_]), forbidden_users[_])
+    msg = sprintf("Line %d: Do not run as root: %s", [i, val])
 }
 
+# ==========================
 # Do not use sudo
+# ==========================
 deny[msg] {
-    some i
     input[i].Cmd == "run"
     val := concat(" ", input[i].Value)
     contains(lower(val), "sudo")
