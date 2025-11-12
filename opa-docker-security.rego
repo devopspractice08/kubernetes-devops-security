@@ -85,10 +85,17 @@ deny[msg] {
     msg := sprintf("Line %d: Do not run as root: %s", [i, input[i].Value[j]])
 }
 
+# -------------------------
 # Deny if no USER command exists
+# -------------------------
 deny[msg] {
-    count([i | input[i].Cmd == "user"]) == 0
+    not user_defined
     msg := "Do not run as root, use USER instead"
+}
+
+user_defined {
+    some i
+    input[i].Cmd == "user"
 }
 
 # -------------------------
