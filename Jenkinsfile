@@ -34,20 +34,26 @@ pipeline {
             }
         }
 
-    stage('SonarQube - SAST') {
-       steps {
-         withSonarQubeEnv('SonarQube') {
-           sh "mvn sonar:sonar \
-	 	              -Dsonar.projectKey=numeric-application \
-	 	              -Dsonar.host.url=http://http://65.1.83.73:9000"
-         }
-         timeout(time: 2, unit: 'MINUTES') {
-           script {
-             waitForQualityGate abortPipeline: true
-           }
-         }
-       }
+      stage('SonarQube - SAST') {
+    steps {
+        withSonarQubeEnv('SonarQube') {
+            withCredentials([string(credentialsId: 'sonar-token', variable: 'SONAR_TOKEN')]) {
+                sh """
+                    mvn sonar:sonar \
+                        -Dsonar.projectKey=numeric-application \
+                        -Dsonar.host.url=http://65.1.83.73:9000 \
+                        -Dsonar.login=$SONAR_TOKEN
+                """
+            }
+        }
+        timeout(time: 2, unit: 'MINUTES') {
+            script {
+                waitForQualityGate abortPipeline: true
+            }
+        }
     }
+}
+
 
         stage('Docker Build and Push') {
             steps {
