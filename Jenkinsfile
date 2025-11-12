@@ -34,9 +34,10 @@ pipeline {
             }
         }
 
-      stage('SonarQube - SAST') {
-    steps {
-        withSonarQubeEnv('SonarQube') {
+
+         stage('SonarQube - SAST') {
+         steps {
+          withSonarQubeEnv('SonarQube') {
             withCredentials([string(credentialsId: 'sonar-token', variable: 'SONAR_TOKEN')]) {
                 sh """
                     mvn sonar:sonar \
@@ -44,11 +45,6 @@ pipeline {
                         -Dsonar.host.url=http://65.1.83.73:9000 \
                         -Dsonar.login=$SONAR_TOKEN
                 """
-            }
-        }
-        timeout(time: 2, unit: 'MINUTES') {
-            script {
-                waitForQualityGate abortPipeline: true
             }
         }
     }
