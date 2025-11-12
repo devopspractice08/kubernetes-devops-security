@@ -3,10 +3,37 @@ pipeline {
 
     environment {
         IMAGE_NAME = "shaikh7/numeric-app"
-        DOCKER_BUILDKIT = "0" // disable BuildKit to avoid Buildx missing error
+        DOCKER_BUILDKIT = "0" // Disable BuildKit to avoid missing buildx issues
     }
 
     stages {
+
+        stage('Pre-Build Cleanup') {
+            steps {
+                script {
+                    // Clean old workspace files that can cause Docker context errors
+                    sh '''
+                        echo "Cleaning old trivy folder, target, and Docker cache..."
+                        rm -rf trivy
+                        rm -rf target
+                        docker builder prune -af || true
+                    '''
+                    // Ensure correct .dockerignore exists
+                    sh '''
+                        cat > .dockerignore <<EOL
+trivy
+.git
+.gitignore
+.vscode
+.idea
+*.log
+*.tmp
+*.md
+EOL
+                    '''
+                }
+            }
+        }
 
         stage('Build Artifact') {
             steps {
@@ -51,7 +78,7 @@ pipeline {
                         }
                     },
                     "Trivy Scan": {
-                        sh "bash trivy-docker-image-scan.sh"
+                        sh "chmod +x trivy-docker-image-scan.sh && bash trivy-docker-image-scan.sh"
                     },
                     "OPA Conftest": {
                         sh '''
@@ -73,9 +100,8 @@ pipeline {
                     )
                 ]) {
                     sh '''
-                        export DOCKER_BUILDKIT=0
                         echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin
-                        docker build -t ${IMAGE_NAME}:${GIT_COMMIT} --build-arg JAR_FILE=target/*.jar .
+                        docker build --build-arg JAR_FILE=target/*.jar -t ${IMAGE_NAME}:${GIT_COMMIT} .
                         docker push ${IMAGE_NAME}:${GIT_COMMIT}
                     '''
                 }
@@ -99,7 +125,6 @@ pipeline {
             junit 'target/surefire-reports/*.xml'
             jacoco execPattern: 'target/jacoco.exec'
             pitmutation mutationStatsFile: '**/target/pit-reports/**/mutations.xml'
-
             script {
                 try {
                     dependencyCheckPublisher pattern: 'target/dependency-check-report.xml'
