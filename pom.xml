@@ -92,36 +92,19 @@
         </configuration>
       </plugin>
 
-      <!-- OWASP Dependency Check -->
+      <!-- OWASP Dependency-Check Plugin -->
       <plugin>
         <groupId>org.owasp</groupId>
         <artifactId>dependency-check-maven</artifactId>
         <version>6.1.6</version>
         <configuration>
           <format>ALL</format>
+          <dataDirectory>/home/ubuntu/nvd-cache</dataDirectory>
+          <autoUpdate>false</autoUpdate>
           <failBuildOnCVSS>8</failBuildOnCVSS>
         </configuration>
       </plugin>
 
-    <plugin>
-    <groupId>org.owasp</groupId>
-    <artifactId>dependency-check-maven</artifactId>
-    <version>6.1.6</version>
-    <configuration>
-        <dataDirectory>/home/ubuntu/nvd-cache</dataDirectory>
-        <failBuildOnCVSS>8</failBuildOnCVSS>
-        <autoUpdate>false</autoUpdate>
-    </configuration>
-
-<configuration>
-    <dataDirectory>/home/ubuntu/nvd-cache</dataDirectory>
-    <autoUpdate>false</autoUpdate>
-    <failBuildOnCVSS>8</failBuildOnCVSS>
-</configuration>
-
-  </plugin>
-
     </plugins>
   </build>
-
 </project>
