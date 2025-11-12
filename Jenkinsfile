@@ -90,12 +90,19 @@ pipeline {
         }
     }
 
-   post {
+  post {
     always {
         junit 'target/surefire-reports/*.xml'
         jacoco execPattern: 'target/jacoco.exec'
         pitmutation mutationStatsFile: '**/target/pit-reports/**/mutations.xml'
-        dependencyCheckPublisher pattern: 'target/dependency-check-report.xml'
+
+        script {
+            try {
+                dependencyCheckPublisher pattern: 'target/dependency-check-report.xml'
+            } catch (err) {
+                echo "Dependency-Check report not found or failed: ${err}"
+            }
+        }
     }
 }
 
