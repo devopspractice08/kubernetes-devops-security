@@ -45,7 +45,10 @@ pipeline {
             steps {
                 parallel(
                     "Dependency Scan": {
-                        sh "mvn dependency-check:check"
+                        // catch network issues to avoid pipeline failure
+                        catchError(buildResult: 'SUCCESS', stageResult: 'UNSTABLE') {
+                            sh "mvn dependency-check:check"
+                        }
                     },
                     "Trivy Scan": {
                         sh "bash trivy-docker-image-scan.sh"
@@ -92,7 +95,7 @@ pipeline {
             junit 'target/surefire-reports/*.xml'
             jacoco execPattern: 'target/jacoco.exec'
             pitmutation mutationStatsFile: '**/target/pit-reports/**/mutations.xml'
-            dependencyCheckPublisher pattern: 'target/dependency-check-report.xml'
+            dependencyCheckPublisher pattern: 'target/dependency-check-report.xml', unstableTotalAll: 1
         }
     }
 }
