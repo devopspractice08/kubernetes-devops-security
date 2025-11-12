@@ -93,17 +93,17 @@
       </plugin>
 
       <!-- OWASP Dependency-Check Plugin -->
-      <plugin>
-        <groupId>org.owasp</groupId>
-        <artifactId>dependency-check-maven</artifactId>
-        <version>6.1.6</version>
-        <configuration>
-          <format>ALL</format>
-          <dataDirectory>/home/ubuntu/nvd-cache</dataDirectory>
-          <autoUpdate>false</autoUpdate>
-          <failBuildOnCVSS>8</failBuildOnCVSS>
-        </configuration>
-      </plugin>
+     <plugin>
+            <groupId>org.owasp</groupId>
+            <artifactId>dependency-check-maven</artifactId>
+            <version>6.1.6</version>
+            <configuration>
+                <dataDirectory>/home/ubuntu/nvd-cache</dataDirectory>
+                <autoUpdate>false</autoUpdate> <!-- disables NVD download to avoid 403 -->
+                <failBuildOnCVSS>8</failBuildOnCVSS>
+                <format>ALL</format>
+            </configuration>
+        </plugin>
 
     </plugins>
   </build>
