@@ -17,13 +17,13 @@ secrets_env = [
 ]
 
 deny[msg] {
-  input[i].Cmd == "env"
-  some j
-  val := input[i].Value[j]
-  some secret
-  secrets_env[_] == lower(val)
-  msg = sprintf("Line %d: Potential secret in ENV key found: %s", [i, val])
+    input[i].Cmd == "env"
+    some j
+    secrets_env[secret_key]
+    lower(input[i].Value[j]) == secret_key
+    msg := sprintf("Line %d: Potential secret in ENV key found: %s", [i, input[i].Value[j]])
 }
+
 
 # -------------------------
 # Do not use 'latest' tag for base images
