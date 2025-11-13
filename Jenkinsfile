@@ -12,13 +12,13 @@ pipeline {
             steps {
                 script {
                     echo "🧹 Cleaning old workspace files..."
-                    sh '''
+                    sh '''#!/bin/bash
                         # Clean everything safely
                         rm -rf trivy || true
                         rm -rf target || true
                         rm -rf .dockerignore || true
 
-                        # Force reset permissions in workspace (fixes stat errors)
+                        # Fix permissions (avoid Jenkins stat errors)
                         sudo chown -R jenkins:jenkins .
                         sudo chmod -R 755 .
 
@@ -27,7 +27,7 @@ pipeline {
                     '''
 
                     echo "📄 Creating fresh .dockerignore file"
-                    sh '''
+                    sh '''#!/bin/bash
                         cat > .dockerignore <<EOL
 trivy
 .git
@@ -69,7 +69,7 @@ EOL
             steps {
                 withSonarQubeEnv('SonarQube') {
                     withCredentials([string(credentialsId: 'sonar-token', variable: 'SONAR_TOKEN')]) {
-                        sh '''
+                        sh '''#!/bin/bash
                             mvn sonar:sonar \
                               -Dsonar.projectKey=numeric-application \
                               -Dsonar.host.url=http://65.1.83.73:9000 \
@@ -89,13 +89,13 @@ EOL
                         }
                     },
                     "Trivy Scan": {
-                        sh '''
+                        sh '''#!/bin/bash
                             chmod +x trivy-docker-image-scan.sh || true
                             bash trivy-docker-image-scan.sh || true
                         '''
                     },
                     "OPA Conftest": {
-                        sh '''
+                        sh '''#!/bin/bash
                             docker run --rm -v $(pwd):/project openpolicyagent/conftest:v0.33.0 \
                             test --policy opa-docker-security.rego Dockerfile
                         '''
@@ -113,17 +113,17 @@ EOL
                         passwordVariable: 'DOCKER_PASS'
                     )
                 ]) {
-                    sh '''
-                        echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin
-                        
+                    script {
                         echo "🐳 Starting Docker Build..."
                         retry(2) {
-                            docker build --no-cache --build-arg JAR_FILE=target/*.jar -t ${IMAGE_NAME}:${GIT_COMMIT} .
+                            sh '''#!/bin/bash
+                                echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin
+                                docker build --no-cache --build-arg JAR_FILE=target/*.jar -t ${IMAGE_NAME}:${GIT_COMMIT} .
+                                docker push ${IMAGE_NAME}:${GIT_COMMIT}
+                            '''
                         }
-
-                        echo "📤 Pushing Image to Docker Hub..."
-                        docker push ${IMAGE_NAME}:${GIT_COMMIT}
-                    '''
+                        echo "📤 Docker image pushed successfully!"
+                    }
                 }
             }
         }
@@ -131,7 +131,7 @@ EOL
         stage('Kubernetes Deployment - Dev') {
             steps {
                 withKubeConfig([credentialsId: 'kubeconfig']) {
-                    sh '''
+                    sh '''#!/bin/bash
                         sed -i "s#replace#${IMAGE_NAME}:${GIT_COMMIT}#g" k8s_deployment_service.yaml
                         kubectl apply -f k8s_deployment_service.yaml
                     '''
