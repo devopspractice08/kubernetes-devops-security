@@ -3,7 +3,7 @@ pipeline {
 
     environment {
         IMAGE_NAME = "shaikh7/numeric-app"
-        DOCKER_BUILDKIT = "0"
+        // Removed DOCKER_BUILDKIT=0 → allows modern builder
     }
 
     stages {
@@ -12,21 +12,8 @@ pipeline {
             steps {
                 script {
                     echo "🧹 Cleaning old workspace files..."
-                    sh '''#!/bin/bash
-                        # Clean everything safely
-                        rm -rf trivy || true
-                        rm -rf target || true
-                        rm -rf .dockerignore || true
 
-                        # Fix permissions (avoid Jenkins stat errors)
-                        sudo chown -R jenkins:jenkins .
-                        sudo chmod -R 755 .
-
-                        # Prune any stale Docker build cache
-                        docker builder prune -af || true
-                    '''
-
-                    echo "📄 Creating fresh .dockerignore file"
+                    // Create .dockerignore first (so unwanted folders are excluded from Docker context)
                     sh '''#!/bin/bash
                         cat > .dockerignore <<EOL
 trivy
@@ -39,6 +26,15 @@ trivy
 *.md
 target/
 EOL
+                    '''
+
+                    // Cleanup and fix permissions
+                    sh '''#!/bin/bash
+                        rm -rf trivy || true
+                        rm -rf target || true
+                        sudo chown -R jenkins:jenkins .
+                        sudo chmod -R 755 .
+                        docker builder prune -af || true
                     '''
 
                     echo "✅ Workspace cleanup complete"
@@ -115,14 +111,26 @@ EOL
                 ]) {
                     script {
                         echo "🐳 Starting Docker Build..."
+
                         retry(2) {
                             sh '''#!/bin/bash
                                 echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin
+
+                                echo "✅ Checking if .dockerignore exists..."
+                                if [ ! -f .dockerignore ]; then
+                                    echo "⚠️ .dockerignore missing, creating..."
+                                    echo "trivy" > .dockerignore
+                                fi
+
+                                echo "🏗️ Building Docker image..."
                                 docker build --no-cache --build-arg JAR_FILE=target/*.jar -t ${IMAGE_NAME}:${GIT_COMMIT} .
+
+                                echo "📤 Pushing Docker image..."
                                 docker push ${IMAGE_NAME}:${GIT_COMMIT}
                             '''
                         }
-                        echo "📤 Docker image pushed successfully!"
+
+                        echo "✅ Docker image pushed successfully!"
                     }
                 }
             }
