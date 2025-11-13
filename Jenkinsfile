@@ -10,6 +10,7 @@ pipeline {
 
         stage('Checkout Code') {
             steps {
+                echo "🔁 Checking out code from SCM..."
                 checkout scm
             }
         }
@@ -25,7 +26,7 @@ pipeline {
             steps {
                 withCredentials([
                     usernamePassword(
-                        credentialsId: 'docker-hub-cred',
+                        credentialsId: 'docker-hub-cred',  // 🔹 Jenkins Docker Hub credentials ID
                         usernameVariable: 'DOCKER_USER',
                         passwordVariable: 'DOCKER_PASS'
                     )
@@ -34,7 +35,7 @@ pipeline {
                         echo "🐳 Logging into Docker Hub..."
                         sh 'echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin'
 
-                        echo "✅ Checking for .dockerignore..."
+                        echo "✅ Ensuring .dockerignore exists..."
                         sh '''
                             if [ ! -f .dockerignore ]; then
                                 echo "⚠️ .dockerignore missing, creating..."
@@ -42,10 +43,11 @@ pipeline {
                             fi
                         '''
 
-                        echo "📦 Preparing JAR file..."
+                        echo "🔍 Checking JAR file..."
                         sh '''
                             if [ ! -f target/numeric-0.0.1.jar ]; then
-                                echo "❌ JAR file not found in target/. Check your Maven build."
+                                echo "❌ ERROR: JAR file not found in target/."
+                                echo "👉 Make sure Maven build creates target/numeric-0.0.1.jar"
                                 exit 1
                             fi
                         '''
@@ -54,11 +56,15 @@ pipeline {
                         sh '''
                             docker build --no-cache \
                             --build-arg JAR_FILE=target/numeric-0.0.1.jar \
-                            -t ${IMAGE_NAME}:${GIT_COMMIT} .
+                            -t ${IMAGE_NAME}:${GIT_COMMIT} \
+                            -t ${IMAGE_NAME}:latest .
                         '''
 
-                        echo "📤 Pushing Docker image..."
-                        sh 'docker push ${IMAGE_NAME}:${GIT_COMMIT}'
+                        echo "📤 Pushing Docker image to Docker Hub..."
+                        sh '''
+                            docker push ${IMAGE_NAME}:${GIT_COMMIT}
+                            docker push ${IMAGE_NAME}:latest
+                        '''
                     }
                 }
             }
@@ -66,12 +72,22 @@ pipeline {
 
         stage('Post Build Cleanup') {
             steps {
-                echo "🧹 Cleaning up old Docker images..."
+                echo "🧹 Cleaning up Docker images and system..."
                 sh '''
                     docker rmi ${IMAGE_NAME}:${GIT_COMMIT} || true
+                    docker rmi ${IMAGE_NAME}:latest || true
                     docker system prune -f || true
                 '''
             }
+        }
+    }
+
+    post {
+        success {
+            echo "✅ Build & Push Successful!"
+        }
+        failure {
+            echo "❌ Build Failed. Check logs for details."
         }
     }
 }
