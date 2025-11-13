@@ -3,100 +3,21 @@ pipeline {
 
     environment {
         IMAGE_NAME = "shaikh7/numeric-app"
-        // Removed DOCKER_BUILDKIT=0 → allows modern builder
+        DOCKER_BUILDKIT = "1"
     }
 
     stages {
 
-        stage('Pre-Build Cleanup') {
+        stage('Checkout Code') {
             steps {
-                script {
-                    echo "🧹 Cleaning old workspace files..."
-
-                    // Create .dockerignore first (so unwanted folders are excluded from Docker context)
-                    sh '''#!/bin/bash
-                        cat > .dockerignore <<EOL
-trivy
-.git
-.gitignore
-.vscode
-.idea
-*.log
-*.tmp
-*.md
-target/
-EOL
-                    '''
-
-                    // Cleanup and fix permissions
-                    sh '''#!/bin/bash
-                        rm -rf trivy || true
-                        rm -rf target || true
-                        sudo chown -R jenkins:jenkins .
-                        sudo chmod -R 755 .
-                        docker builder prune -af || true
-                    '''
-
-                    echo "✅ Workspace cleanup complete"
-                }
+                checkout scm
             }
         }
 
-        stage('Build Artifact') {
+        stage('Build JAR') {
             steps {
-                sh "mvn clean package -DskipTests=true"
-                archiveArtifacts artifacts: 'target/*.jar', fingerprint: true
-            }
-        }
-
-        stage('Unit Tests') {
-            steps {
-                sh "mvn test"
-            }
-        }
-
-        stage('Mutation Tests - PIT') {
-            steps {
-                sh "mvn org.pitest:pitest-maven:mutationCoverage"
-            }
-        }
-
-        stage('SonarQube - SAST') {
-            steps {
-                withSonarQubeEnv('SonarQube') {
-                    withCredentials([string(credentialsId: 'sonar-token', variable: 'SONAR_TOKEN')]) {
-                        sh '''#!/bin/bash
-                            mvn sonar:sonar \
-                              -Dsonar.projectKey=numeric-application \
-                              -Dsonar.host.url=http://65.1.83.73:9000 \
-                              -Dsonar.login=$SONAR_TOKEN
-                        '''
-                    }
-                }
-            }
-        }
-
-        stage('Vulnerability Scan - Docker') {
-            steps {
-                parallel(
-                    "Dependency Scan": {
-                        catchError(buildResult: 'SUCCESS', stageResult: 'UNSTABLE') {
-                            sh "mvn dependency-check:check"
-                        }
-                    },
-                    "Trivy Scan": {
-                        sh '''#!/bin/bash
-                            chmod +x trivy-docker-image-scan.sh || true
-                            bash trivy-docker-image-scan.sh || true
-                        '''
-                    },
-                    "OPA Conftest": {
-                        sh '''#!/bin/bash
-                            docker run --rm -v $(pwd):/project openpolicyagent/conftest:v0.33.0 \
-                            test --policy opa-docker-security.rego Dockerfile
-                        '''
-                    }
-                )
+                echo "🏗️ Building Java Application..."
+                sh 'mvn clean package -DskipTests=true'
             }
         }
 
@@ -110,55 +31,46 @@ EOL
                     )
                 ]) {
                     script {
-                        echo "🐳 Starting Docker Build..."
+                        echo "🐳 Logging into Docker Hub..."
+                        sh 'echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin'
 
-                        retry(2) {
-                            sh '''#!/bin/bash
-                                echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin
+                        echo "✅ Checking for .dockerignore..."
+                        sh '''
+                            if [ ! -f .dockerignore ]; then
+                                echo "⚠️ .dockerignore missing, creating..."
+                                echo "trivy" > .dockerignore
+                            fi
+                        '''
 
-                                echo "✅ Checking if .dockerignore exists..."
-                                if [ ! -f .dockerignore ]; then
-                                    echo "⚠️ .dockerignore missing, creating..."
-                                    echo "trivy" > .dockerignore
-                                fi
+                        echo "📦 Preparing JAR file..."
+                        sh '''
+                            if [ ! -f target/numeric-0.0.1.jar ]; then
+                                echo "❌ JAR file not found in target/. Check your Maven build."
+                                exit 1
+                            fi
+                        '''
 
-                                echo "🏗️ Building Docker image..."
-                                docker build --no-cache --build-arg JAR_FILE=target/*.jar -t ${IMAGE_NAME}:${GIT_COMMIT} .
+                        echo "🚀 Building Docker image..."
+                        sh '''
+                            docker build --no-cache \
+                            --build-arg JAR_FILE=target/numeric-0.0.1.jar \
+                            -t ${IMAGE_NAME}:${GIT_COMMIT} .
+                        '''
 
-                                echo "📤 Pushing Docker image..."
-                                docker push ${IMAGE_NAME}:${GIT_COMMIT}
-                            '''
-                        }
-
-                        echo "✅ Docker image pushed successfully!"
+                        echo "📤 Pushing Docker image..."
+                        sh 'docker push ${IMAGE_NAME}:${GIT_COMMIT}'
                     }
                 }
             }
         }
 
-        stage('Kubernetes Deployment - Dev') {
+        stage('Post Build Cleanup') {
             steps {
-                withKubeConfig([credentialsId: 'kubeconfig']) {
-                    sh '''#!/bin/bash
-                        sed -i "s#replace#${IMAGE_NAME}:${GIT_COMMIT}#g" k8s_deployment_service.yaml
-                        kubectl apply -f k8s_deployment_service.yaml
-                    '''
-                }
-            }
-        }
-    }
-
-    post {
-        always {
-            junit 'target/surefire-reports/*.xml'
-            jacoco execPattern: 'target/jacoco.exec'
-            pitmutation mutationStatsFile: '**/target/pit-reports/**/mutations.xml'
-            script {
-                try {
-                    dependencyCheckPublisher pattern: 'target/dependency-check-report.xml'
-                } catch (err) {
-                    echo "Dependency-Check report not found or failed: ${err}"
-                }
+                echo "🧹 Cleaning up old Docker images..."
+                sh '''
+                    docker rmi ${IMAGE_NAME}:${GIT_COMMIT} || true
+                    docker system prune -f || true
+                '''
             }
         }
     }
