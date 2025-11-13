@@ -3,7 +3,7 @@ pipeline {
 
     environment {
         IMAGE_NAME = "shaikh7/numeric-app"
-        // Removed DOCKER_BUILDKIT=0 → allows modern builder
+        DOCKER_BUILDKIT = "1" // enable modern Docker builder
     }
 
     stages {
@@ -13,10 +13,16 @@ pipeline {
                 script {
                     echo "🧹 Cleaning old workspace files..."
 
-                    // Create .dockerignore first (so unwanted folders are excluded from Docker context)
                     sh '''#!/bin/bash
+                        # Remove broken folders and old files
+                        sudo rm -rf trivy || true
+                        sudo rm -rf target || true
+                        sudo rm -rf .dockerignore || true
+
+                        # Recreate .dockerignore fresh
                         cat > .dockerignore <<EOL
 trivy
+target/
 .git
 .gitignore
 .vscode
@@ -24,16 +30,13 @@ trivy
 *.log
 *.tmp
 *.md
-target/
 EOL
-                    '''
 
-                    // Cleanup and fix permissions
-                    sh '''#!/bin/bash
-                        rm -rf trivy || true
-                        rm -rf target || true
+                        # Reset permissions for Jenkins
                         sudo chown -R jenkins:jenkins .
                         sudo chmod -R 755 .
+
+                        # Clean old Docker cache
                         docker builder prune -af || true
                     '''
 
@@ -44,20 +47,30 @@ EOL
 
         stage('Build Artifact') {
             steps {
-                sh "mvn clean package -DskipTests=true"
+                echo "🏗️ Building Maven artifact..."
+                sh 'mvn clean package -DskipTests=true'
+
+                echo "🔍 Checking if JAR file exists..."
+                sh '''#!/bin/bash
+                    if [ ! -f target/numeric-0.0.1.jar ]; then
+                        echo "❌ ERROR: target/numeric-0.0.1.jar not found!"
+                        exit 1
+                    fi
+                '''
                 archiveArtifacts artifacts: 'target/*.jar', fingerprint: true
             }
         }
 
         stage('Unit Tests') {
             steps {
-                sh "mvn test"
+                echo "🧪 Running unit tests..."
+                sh 'mvn test'
             }
         }
 
         stage('Mutation Tests - PIT') {
             steps {
-                sh "mvn org.pitest:pitest-maven:mutationCoverage"
+                sh 'mvn org.pitest:pitest-maven:mutationCoverage'
             }
         }
 
@@ -81,7 +94,7 @@ EOL
                 parallel(
                     "Dependency Scan": {
                         catchError(buildResult: 'SUCCESS', stageResult: 'UNSTABLE') {
-                            sh "mvn dependency-check:check"
+                            sh 'mvn dependency-check:check'
                         }
                     },
                     "Trivy Scan": {
@@ -110,27 +123,22 @@ EOL
                     )
                 ]) {
                     script {
-                        echo "🐳 Starting Docker Build..."
+                        echo "🐳 Logging into Docker Hub..."
+                        sh 'echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin'
 
-                        retry(2) {
-                            sh '''#!/bin/bash
-                                echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin
+                        echo "🏗️ Building Docker image..."
+                        sh '''#!/bin/bash
+                            docker build --no-cache \
+                              --build-arg JAR_FILE=target/numeric-0.0.1.jar \
+                              -t ${IMAGE_NAME}:${GIT_COMMIT} \
+                              -t ${IMAGE_NAME}:latest .
+                        '''
 
-                                echo "✅ Checking if .dockerignore exists..."
-                                if [ ! -f .dockerignore ]; then
-                                    echo "⚠️ .dockerignore missing, creating..."
-                                    echo "trivy" > .dockerignore
-                                fi
-
-                                echo "🏗️ Building Docker image..."
-                                docker build --no-cache --build-arg JAR_FILE=target/*.jar -t ${IMAGE_NAME}:${GIT_COMMIT} .
-
-                                echo "📤 Pushing Docker image..."
-                                docker push ${IMAGE_NAME}:${GIT_COMMIT}
-                            '''
-                        }
-
-                        echo "✅ Docker image pushed successfully!"
+                        echo "📤 Pushing Docker image..."
+                        sh '''
+                            docker push ${IMAGE_NAME}:${GIT_COMMIT}
+                            docker push ${IMAGE_NAME}:latest
+                        '''
                     }
                 }
             }
@@ -160,6 +168,12 @@ EOL
                     echo "Dependency-Check report not found or failed: ${err}"
                 }
             }
+        }
+        success {
+            echo "✅ Pipeline completed successfully!"
+        }
+        failure {
+            echo "❌ Pipeline failed — check logs carefully!"
         }
     }
 }
