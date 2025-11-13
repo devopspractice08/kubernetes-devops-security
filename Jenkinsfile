@@ -116,7 +116,7 @@ EOL
         }
 
         // -------------------------------------------------------------------
-        stage('Docker Build and Push') {
+       stage('Docker Build and Push') {
     steps {
         withCredentials([
             usernamePassword(
@@ -129,20 +129,23 @@ EOL
                 echo "🐳 Logging into Docker Hub..."
                 sh 'echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin'
 
-                echo "🔍 Checking if JAR exists..."
+                echo "📦 Preparing JAR for Docker build..."
                 sh '''
-                    if [ ! -f target/*.jar ]; then
-                        echo "❌ JAR not found! Building it now..."
-                        mvn clean package -DskipTests=true
-                    fi
-                    echo "✅ JAR file found:"
-                    ls -l target/*.jar
+                    # Ensure JAR exists
+                    mvn clean package -DskipTests=true
+
+                    # Copy JAR to workspace root so Docker can access it easily
+                    JAR_FILE=$(ls target/*.jar | head -n 1)
+                    cp $JAR_FILE app.jar
+
+                    echo "✅ Copied JAR to workspace root:"
+                    ls -l app.jar
                 '''
 
                 echo "🏗️ Building Docker image..."
                 sh '''
                     docker build --no-cache \
-                        --build-arg JAR_FILE=target/*.jar \
+                        --build-arg JAR_FILE=app.jar \
                         -t ${IMAGE_NAME}:${GIT_COMMIT} \
                         -t ${IMAGE_NAME}:latest .
                 '''
@@ -153,11 +156,12 @@ EOL
                     docker push ${IMAGE_NAME}:latest
                 '''
 
-                echo "✅ Docker image pushed successfully!"
+                echo "✅ Docker image built and pushed successfully!"
             }
         }
     }
 }
+
 
 
         // -------------------------------------------------------------------
