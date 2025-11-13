@@ -117,40 +117,48 @@ EOL
 
         // -------------------------------------------------------------------
         stage('Docker Build and Push') {
-            steps {
-                withCredentials([
-                    usernamePassword(
-                        credentialsId: 'docker-hub-cred',
-                        usernameVariable: 'DOCKER_USER',
-                        passwordVariable: 'DOCKER_PASS'
-                    )
-                ]) {
-                    script {
-                        echo "🐳 Logging into Docker Hub..."
-                        sh '''#!/bin/bash
-                            echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin
-                        '''
+    steps {
+        withCredentials([
+            usernamePassword(
+                credentialsId: 'docker-hub-cred',
+                usernameVariable: 'DOCKER_USER',
+                passwordVariable: 'DOCKER_PASS'
+            )
+        ]) {
+            script {
+                echo "🐳 Logging into Docker Hub..."
+                sh 'echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin'
 
-                        echo "🏗️ Building Docker image..."
-                        sh '''#!/bin/bash
-                            export DOCKER_BUILDKIT=0
-                            docker build --no-cache \
-                                --build-arg JAR_FILE=target/numeric-0.0.1.jar \
-                                -t ${IMAGE_NAME}:${GIT_COMMIT} \
-                                -t ${IMAGE_NAME}:latest .
-                        '''
+                echo "🔍 Checking if JAR exists..."
+                sh '''
+                    if [ ! -f target/*.jar ]; then
+                        echo "❌ JAR not found! Building it now..."
+                        mvn clean package -DskipTests=true
+                    fi
+                    echo "✅ JAR file found:"
+                    ls -l target/*.jar
+                '''
 
-                        echo "📤 Pushing Docker image..."
-                        sh '''
-                            docker push ${IMAGE_NAME}:${GIT_COMMIT}
-                            docker push ${IMAGE_NAME}:latest
-                        '''
+                echo "🏗️ Building Docker image..."
+                sh '''
+                    docker build --no-cache \
+                        --build-arg JAR_FILE=target/*.jar \
+                        -t ${IMAGE_NAME}:${GIT_COMMIT} \
+                        -t ${IMAGE_NAME}:latest .
+                '''
 
-                        echo "✅ Docker image pushed successfully!"
-                    }
-                }
+                echo "📤 Pushing Docker image..."
+                sh '''
+                    docker push ${IMAGE_NAME}:${GIT_COMMIT}
+                    docker push ${IMAGE_NAME}:latest
+                '''
+
+                echo "✅ Docker image pushed successfully!"
             }
         }
+    }
+}
+
 
         // -------------------------------------------------------------------
         stage('Kubernetes Deployment - Dev') {
