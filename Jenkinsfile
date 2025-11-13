@@ -164,6 +164,19 @@ EOL
 
 
 
+
+        stage('Vulnerability Scan - Kubernetes') {
+    steps {
+        echo "🔒 Starting OPA (Open Policy Agent) scan for Kubernetes manifests..."
+        sh '''#!/bin/bash
+            echo "🧩 Running OPA (Open Policy Agent) scan..."
+            docker run --rm -v $(pwd):/project openpolicyagent/conftest \
+                test --policy opa-k8s-security.rego k8s_deployment_service.yaml
+        '''
+        echo "✅ OPA scan completed successfully!"
+    }
+}
+
         // -------------------------------------------------------------------
         stage('Kubernetes Deployment - Dev') {
             steps {
