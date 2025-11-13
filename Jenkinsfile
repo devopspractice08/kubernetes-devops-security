@@ -3,26 +3,21 @@ pipeline {
 
     environment {
         IMAGE_NAME = "shaikh7/numeric-app"
-        DOCKER_BUILDKIT = "1" // enable modern Docker builder
+        DOCKER_BUILDKIT = "0" // ✅ Disable BuildKit to avoid buildx error
     }
 
     stages {
 
+        // -------------------------------------------------------------------
         stage('Pre-Build Cleanup') {
             steps {
                 script {
                     echo "🧹 Cleaning old workspace files..."
 
+                    // Create .dockerignore (exclude unnecessary files)
                     sh '''#!/bin/bash
-                        # Remove broken folders and old files
-                        sudo rm -rf trivy || true
-                        sudo rm -rf target || true
-                        sudo rm -rf .dockerignore || true
-
-                        # Recreate .dockerignore fresh
                         cat > .dockerignore <<EOL
 trivy
-target/
 .git
 .gitignore
 .vscode
@@ -30,52 +25,52 @@ target/
 *.log
 *.tmp
 *.md
+target/
 EOL
-
-                        # Reset permissions for Jenkins
-                        sudo chown -R jenkins:jenkins .
-                        sudo chmod -R 755 .
-
-                        # Clean old Docker cache
-                        docker builder prune -af || true
                     '''
 
+                    // Clean and fix permissions
+                    sh '''#!/bin/bash
+                        rm -rf trivy || true
+                        rm -rf target || true
+                        sudo chown -R jenkins:jenkins . || true
+                        sudo chmod -R 755 . || true
+                        docker builder prune -af || true
+                    '''
                     echo "✅ Workspace cleanup complete"
                 }
             }
         }
 
+        // -------------------------------------------------------------------
         stage('Build Artifact') {
             steps {
-                echo "🏗️ Building Maven artifact..."
-                sh 'mvn clean package -DskipTests=true'
-
-                echo "🔍 Checking if JAR file exists..."
-                sh '''#!/bin/bash
-                    if [ ! -f target/numeric-0.0.1.jar ]; then
-                        echo "❌ ERROR: target/numeric-0.0.1.jar not found!"
-                        exit 1
-                    fi
-                '''
+                echo "🏗️ Building Maven Artifact..."
+                sh "mvn clean package -DskipTests=true"
                 archiveArtifacts artifacts: 'target/*.jar', fingerprint: true
             }
         }
 
+        // -------------------------------------------------------------------
         stage('Unit Tests') {
             steps {
-                echo "🧪 Running unit tests..."
-                sh 'mvn test'
+                echo "🧪 Running Unit Tests..."
+                sh "mvn test"
             }
         }
 
+        // -------------------------------------------------------------------
         stage('Mutation Tests - PIT') {
             steps {
-                sh 'mvn org.pitest:pitest-maven:mutationCoverage'
+                echo "🧬 Running Mutation Tests..."
+                sh "mvn org.pitest:pitest-maven:mutationCoverage"
             }
         }
 
+        // -------------------------------------------------------------------
         stage('SonarQube - SAST') {
             steps {
+                echo "🔍 Running SonarQube Scan..."
                 withSonarQubeEnv('SonarQube') {
                     withCredentials([string(credentialsId: 'sonar-token', variable: 'SONAR_TOKEN')]) {
                         sh '''#!/bin/bash
@@ -89,21 +84,28 @@ EOL
             }
         }
 
-        stage('Vulnerability Scan - Docker') {
+        // -------------------------------------------------------------------
+        stage('Vulnerability Scans') {
             steps {
                 parallel(
-                    "Dependency Scan": {
+                    "Dependency Check (Maven)": {
+                        echo "🛡️ Dependency Check..."
                         catchError(buildResult: 'SUCCESS', stageResult: 'UNSTABLE') {
-                            sh 'mvn dependency-check:check'
+                            sh "mvn org.owasp:dependency-check-maven:check"
                         }
                     },
-                    "Trivy Scan": {
+                    "Trivy File Scan": {
+                        echo "🐋 Trivy Security Scan..."
                         sh '''#!/bin/bash
-                            chmod +x trivy-docker-image-scan.sh || true
-                            bash trivy-docker-image-scan.sh || true
+                            if ! command -v trivy &> /dev/null; then
+                                echo "Installing Trivy..."
+                                curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sudo sh -s -- -b /usr/local/bin
+                            fi
+                            trivy fs --exit-code 0 --severity HIGH,CRITICAL .
                         '''
                     },
-                    "OPA Conftest": {
+                    "OPA Conftest Policy": {
+                        echo "🧾 OPA Conftest Policy Scan..."
                         sh '''#!/bin/bash
                             docker run --rm -v $(pwd):/project openpolicyagent/conftest:v0.33.0 \
                             test --policy opa-docker-security.rego Dockerfile
@@ -113,6 +115,7 @@ EOL
             }
         }
 
+        // -------------------------------------------------------------------
         stage('Docker Build and Push') {
             steps {
                 withCredentials([
@@ -124,14 +127,17 @@ EOL
                 ]) {
                     script {
                         echo "🐳 Logging into Docker Hub..."
-                        sh 'echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin'
+                        sh '''#!/bin/bash
+                            echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin
+                        '''
 
                         echo "🏗️ Building Docker image..."
                         sh '''#!/bin/bash
+                            export DOCKER_BUILDKIT=0
                             docker build --no-cache \
-                              --build-arg JAR_FILE=target/numeric-0.0.1.jar \
-                              -t ${IMAGE_NAME}:${GIT_COMMIT} \
-                              -t ${IMAGE_NAME}:latest .
+                                --build-arg JAR_FILE=target/numeric-0.0.1.jar \
+                                -t ${IMAGE_NAME}:${GIT_COMMIT} \
+                                -t ${IMAGE_NAME}:latest .
                         '''
 
                         echo "📤 Pushing Docker image..."
@@ -139,13 +145,17 @@ EOL
                             docker push ${IMAGE_NAME}:${GIT_COMMIT}
                             docker push ${IMAGE_NAME}:latest
                         '''
+
+                        echo "✅ Docker image pushed successfully!"
                     }
                 }
             }
         }
 
+        // -------------------------------------------------------------------
         stage('Kubernetes Deployment - Dev') {
             steps {
+                echo "🚀 Deploying to Kubernetes (Dev)..."
                 withKubeConfig([credentialsId: 'kubeconfig']) {
                     sh '''#!/bin/bash
                         sed -i "s#replace#${IMAGE_NAME}:${GIT_COMMIT}#g" k8s_deployment_service.yaml
@@ -156,24 +166,21 @@ EOL
         }
     }
 
+    // -------------------------------------------------------------------
     post {
         always {
+            echo "📦 Publishing reports..."
             junit 'target/surefire-reports/*.xml'
             jacoco execPattern: 'target/jacoco.exec'
             pitmutation mutationStatsFile: '**/target/pit-reports/**/mutations.xml'
+
             script {
                 try {
                     dependencyCheckPublisher pattern: 'target/dependency-check-report.xml'
                 } catch (err) {
-                    echo "Dependency-Check report not found or failed: ${err}"
+                    echo "⚠️ Dependency report missing: ${err}"
                 }
             }
-        }
-        success {
-            echo "✅ Pipeline completed successfully!"
-        }
-        failure {
-            echo "❌ Pipeline failed — check logs carefully!"
         }
     }
 }
