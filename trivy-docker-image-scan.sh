@@ -1,27 +1,30 @@
 #!/bin/bash
 
-# Extract the base image from Dockerfile
+# 1. Get the base image name from the first line of the Dockerfile
 dockerImageName=$(awk 'NR==1 {print $2}' Dockerfile)
-echo "Scanning Base Image: $dockerImageName"
+echo "Base image identified: $dockerImageName"
 
-# Create a specific directory for trivy cache to avoid permission errors in workspace root
-mkdir -p $WORKSPACE/trivy-cache
+# 2. Run Trivy scan for HIGH vulnerabilities 
+# We mount the cache to /tmp so it doesn't mess up the Jenkins workspace permissions
+docker run --rm \
+  -v /tmp/trivy-cache:/root/.cache/ \
+  aquasec/trivy:0.17.2 -q image --exit-code 0 --severity HIGH --light $dockerImageName
 
-# Run Trivy scans
-# Scan 1: High vulnerabilities (won't fail the build)
-docker run --rm -v $WORKSPACE/trivy-cache:/root/.cache/ aquasec/trivy:0.17.2 -q image --exit-code 0 --severity HIGH --light $dockerImageName
+# 3. Run Trivy scan for CRITICAL vulnerabilities
+# This one will return exit code 1 if it finds anything CRITICAL
+docker run --rm \
+  -v /tmp/trivy-cache:/root/.cache/ \
+  aquasec/trivy:0.17.2 -q image --exit-code 1 --severity CRITICAL --light $dockerImageName
 
-# Scan 2: Critical vulnerabilities (will fail the build if found)
-docker run --rm -v $WORKSPACE/trivy-cache:/root/.cache/ aquasec/trivy:0.17.2 -q image --exit-code 1 --severity CRITICAL --light $dockerImageName
-
-# Capture exit code of the CRITICAL scan
+# 4. Capture the exit code of the CRITICAL scan
 exit_code=$?
-echo "Trivy Exit Code : $exit_code"
+echo "Trivy Scan Exit Code: $exit_code"
 
+# 5. Process the result
 if [[ "${exit_code}" == 1 ]]; then
-    echo "Image scanning failed. CRITICAL vulnerabilities found."
+    echo "Scan Result: CRITICAL vulnerabilities found. Failing the stage."
     exit 1
 else
-    echo "Image scanning passed. No CRITICAL vulnerabilities found."
+    echo "Scan Result: No CRITICAL vulnerabilities found. Proceeding..."
     exit 0
 fi
