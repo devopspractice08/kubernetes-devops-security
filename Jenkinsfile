@@ -56,26 +56,9 @@ pipeline {
             steps {
                 withDockerRegistry([credentialsId: 'docker-hub', url: '']) {
                     sh '''
-                        # 1. Clear any old app.jar in the root
-                        rm -f ./app.jar
-                        
-                        # 2. Copy the jar from target to the current root directory
-                        cp target/*.jar ./app.jar
-                        
-                        # 3. Build the image (Docker will now look for app.jar in the root)
-                        docker build -t shaikh7/numeric-app:${GIT_COMMIT} -f - . <<EOF
-FROM eclipse-temurin:8-jre-jammy
-WORKDIR /app
-COPY app.jar app.jar
-EXPOSE 8080
-ENTRYPOINT ["java","-jar","app.jar"]
-EOF
-                        
-                        # 4. Push the image
+                        # The .dockerignore is critical here
+                        docker build -t shaikh7/numeric-app:${GIT_COMMIT} .
                         docker push shaikh7/numeric-app:${GIT_COMMIT}
-                        
-                        # 5. Cleanup the temp jar
-                        rm -f ./app.jar
                     '''
                 }
             }
