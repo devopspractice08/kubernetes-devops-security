@@ -5,7 +5,7 @@ import rego.v1
 # 1. Block secrets in ENV keys
 secrets_env := ["passwd", "password", "secret", "key", "token", "apikey"]
 
-deny[msg] if {
+deny contains msg if {
 	input[i].Cmd == "env"
 	val := lower(input[i].Value[_])
 	some secret in secrets_env
@@ -14,7 +14,7 @@ deny[msg] if {
 }
 
 # 2. No 'latest' tags
-deny[msg] if {
+deny contains msg if {
 	input[i].Cmd == "from"
 	val := input[i].Value[0]
 	contains(val, ":latest")
@@ -22,17 +22,16 @@ deny[msg] if {
 }
 
 # 3. Avoid curl/wget in RUN
-deny[msg] if {
+deny contains msg if {
 	input[i].Cmd == "run"
 	val := lower(concat(" ", input[i].Value))
-	# Using regex.match for better compatibility
 	regex.match(`(curl|wget)`, val)
 	msg := sprintf("Line %d: Avoid curl/wget in RUN", [i])
 }
 
 # 4. No system upgrades in RUN
 upgrade_cmds := ["apk upgrade", "apt-get upgrade", "dist-upgrade"]
-deny[msg] if {
+deny contains msg if {
 	input[i].Cmd == "run"
 	val := lower(concat(" ", input[i].Value))
 	some upgrade in upgrade_cmds
@@ -41,7 +40,7 @@ deny[msg] if {
 }
 
 # 5. COPY not ADD
-deny[msg] if {
+deny contains msg if {
 	input[i].Cmd == "add"
 	msg := sprintf("Line %d: Use COPY instead of ADD", [i])
 }
@@ -51,7 +50,7 @@ any_user if {
 	input[_].Cmd == "user"
 }
 
-deny[msg] if {
+deny contains msg if {
 	not any_user
 	msg := "Use USER to switch from root"
 }
