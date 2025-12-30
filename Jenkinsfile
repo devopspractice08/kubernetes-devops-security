@@ -33,17 +33,6 @@ pipeline {
       }
     }
 
-    stage('Docker Build & Push') {
-      steps {
-        withDockerRegistry([credentialsId: 'docker-hub', url: '']) {
-          sh '''
-            docker build -t shaikh7/numeric-app:${GIT_COMMIT} .
-            docker push shaikh7/numeric-app:${GIT_COMMIT}
-          '''
-        }
-      }
-    }
-
     stage('Vulnerability Scan - Docker') {
       steps {
         parallel(
@@ -57,6 +46,18 @@ pipeline {
             '''
           }
         )
+      }
+    }
+
+
+    stage('Docker Build & Push') {
+      steps {
+        withDockerRegistry([credentialsId: 'docker-hub', url: '']) {
+          sh '''
+            docker build -t shaikh7/numeric-app:${GIT_COMMIT} .
+            docker push shaikh7/numeric-app:${GIT_COMMIT}
+          '''
+        }
       }
     }
 
