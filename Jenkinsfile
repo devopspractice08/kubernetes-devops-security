@@ -34,13 +34,16 @@ pipeline {
     }
 
 
-    stage('Kubernetes Deployment - DEV') {
-      steps {
-        withKubeConfig([credentialsId: 'kubeconfig']) {
-          sh 'sed -i "s#replace#shaikh7/numeric-app:${GIT_COMMIT}#g" k8s_deployment_service.yaml'
-          sh 'kubectl apply -f k8s_deployment_service.yaml'
-        }
-      }
+ stage('Kubernetes Deployment - DEV') {
+  steps {
+    withCredentials([file(credentialsId: 'kubeconfig', variable: 'KUBECONFIG')]) {
+      sh '''
+        sed -i "s#replace#shaikh7/numeric-app:${GIT_COMMIT}#g" k8s_deployment_service.yaml
+        kubectl apply -f k8s_deployment_service.yaml
+      '''
     }
+  }
+}
+
   }
 }
