@@ -1,44 +1,58 @@
 package main
 
-# 1. Block secrets in ENV
-secrets_env = ["passwd", "password", "secret", "key", "token", "apikey"]
-deny[msg] {
-    input[i].Cmd == "env"
-    some j
-    val := lower(input[i].Value[j])
-    contains(val, secrets_env[_])
-    msg := sprintf("Line %d: Potential secret in ENV: %s", [i, val])
+import rego.v1
+
+# 1. Block secrets in ENV keys
+secrets_env := ["passwd", "password", "secret", "key", "token", "apikey"]
+
+deny[msg] if {
+	input[i].Cmd == "env"
+	val := lower(input[i].Value[_])
+	some secret in secrets_env
+	contains(val, secret)
+	msg := sprintf("Line %d: Potential secret in ENV key: %s", [i, input[i].Value])
 }
 
-# 2. Trusted base images (Allowing official and specific libraries)
-# Note: Your current rule blocks "eclipse-temurin" because it HAS NO slash. 
-# Usually, people block images WITHOUT a slash to ensure they come from a specific registry.
-deny[msg] {
-    input[i].Cmd == "from"
-    val := input[i].Value[0]
-    contains(val, "/") # This blocks namespaces. Remove this if you use private registries.
-    msg := sprintf("Line %d: Use a trusted base image without namespaces", [i])
+# 2. Trusted base images only (simple check)
+deny[msg] if {
+	input[i].Cmd == "from"
+	val := input[i].Value[0]
+	contains(val, "latest")
+	msg := sprintf("Line %d: Do not use 'latest' tag for base images", [i])
 }
 
-# 3. No 'latest' tags
-deny[msg] {
-    input[i].Cmd == "from"
-    val := input[i].Value[0]
-    contains(val, ":latest")
-    msg := sprintf("Line %d: Do not use 'latest' tag", [i])
+# 3. Avoid curl/wget in RUN
+deny[msg] if {
+	input[i].Cmd == "run"
+	val := lower(concat(" ", input[i].Value))
+	matches := regex.find_all(`(curl|wget)[^ ]*`, val)
+	count(matches) > 0
+	msg := sprintf("Line %d: Avoid curl/wget in RUN", [i])
 }
 
-# 4. Must switch from root
-any_user {
-    input[_].Cmd == "user"
-}
-deny[msg] {
-    not any_user
-    msg := "Security Violation: Dockerfile must contain a USER instruction to switch from root"
+# 4. No system upgrades in RUN
+upgrade_cmds := ["apk upgrade", "apt-get upgrade", "dist-upgrade"]
+
+deny[msg] if {
+	input[i].Cmd == "run"
+	val := lower(concat(" ", input[i].Value))
+	some upgrade in upgrade_cmds
+	contains(val, upgrade)
+	msg := sprintf("Line %d: Do not upgrade system packages in Dockerfile", [i])
 }
 
 # 5. COPY not ADD
-deny[msg] {
-    input[i].Cmd == "add"
-    msg := sprintf("Line %d: Use COPY instead of ADD", [i])
+deny[msg] if {
+	input[i].Cmd == "add"
+	msg := sprintf("Line %d: Use COPY instead of ADD", [i])
+}
+
+# 6. Must switch from root
+any_user if {
+	input[_].Cmd == "user"
+}
+
+deny[msg] if {
+    not any_user
+    msg := "Use USER to switch from root"
 }
