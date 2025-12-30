@@ -1,5 +1,5 @@
 trivy
 trivy-cache
-target
-*.sh
 .git
+*.sh
+# DO NOT put target/ here
