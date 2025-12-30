@@ -14,22 +14,11 @@ pipeline {
       steps {
         sh 'mvn test'
       }
-      post {
-        always {
-          junit 'target/surefire-reports/*.xml'
-          jacoco execPattern: 'target/jacoco.exec'
-        }
-      }
     }
 
     stage('Mutation Tests - PIT') {
       steps {
         sh 'mvn org.pitest:pitest-maven:mutationCoverage'
-      }
-      post {
-        always {
-          pitmutation mutationStatsFile: '**/target/pit-reports/**/mutations.xml'
-        }
       }
     }
 
@@ -44,18 +33,19 @@ pipeline {
       }
     }
 
-  stage('Vulnerability Scan - OWASP') {
-  steps {
-    sh 'mvn dependency-check:check -DskipTests=true || true'
-  }
-}
-
+    stage('Vulnerability Scan - OWASP') {
+      steps {
+        sh 'mvn dependency-check:check -DskipTests=true || true'
+      }
+    }
 
     stage('Docker Build & Push') {
       steps {
         withDockerRegistry([credentialsId: 'docker-hub', url: '']) {
-          sh 'docker build -t shaikh7/numeric-app:${GIT_COMMIT} .'
-          sh 'docker push shaikh7/numeric-app:${GIT_COMMIT}'
+          sh '''
+            docker build -t shaikh7/numeric-app:${GIT_COMMIT} .
+            docker push shaikh7/numeric-app:${GIT_COMMIT}
+          '''
         }
       }
     }
@@ -70,6 +60,14 @@ pipeline {
         }
       }
     }
+  }
 
+  post {
+    always {
+      junit 'target/surefire-reports/*.xml'
+      jacoco execPattern: 'target/jacoco.exec'
+      pitmutation mutationStatsFile: '**/target/pit-reports/**/mutations.xml'
+      dependencyCheckPublisher pattern: '**/dependency-check-report.xml'
+    }
   }
 }
