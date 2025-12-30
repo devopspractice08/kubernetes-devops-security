@@ -1,19 +1,23 @@
 #!/bin/bash
+set -e
 
-dockerImageName=$(awk 'NR==1 {print $2}' Dockerfile)
-echo $dockerImageName
+IMAGE="shaikh7/numeric-app:${GIT_COMMIT}"
 
-docker run --rm -v $WORKSPACE:/root/.cache/ aquasec/trivy:0.17.2 -q image --exit-code 0 --severity HIGH --light $dockerImageName
-docker run --rm -v $WORKSPACE:/root/.cache/ aquasec/trivy:0.17.2 -q image --exit-code 1 --severity CRITICAL --light $dockerImageName
+echo "Scanning image: $IMAGE"
 
-    # Trivy scan result processing
-    exit_code=$?
-    echo "Exit Code : $exit_code"
+# Trivy cache directory (isolated, safe)
+mkdir -p /tmp/trivy-cache
 
-    # Check scan results
-    if [[ "${exit_code}" == 1 ]]; then
-        echo "Image scanning failed. Vulnerabilities found"
-        exit 1;
-    else
-        echo "Image scanning passed. No CRITICAL vulnerabilities found"
-    fi;
+# HIGH vulnerabilities (do not fail build)
+docker run --rm \
+  -v /tmp/trivy-cache:/root/.cache/ \
+  aquasec/trivy:0.52.0 \
+  image --severity HIGH --exit-code 0 $IMAGE
+
+# CRITICAL vulnerabilities (fail build)
+docker run --rm \
+  -v /tmp/trivy-cache:/root/.cache/ \
+  aquasec/trivy:0.52.0 \
+  image --severity CRITICAL --exit-code 1 $IMAGE
+
+echo "Trivy scan completed successfully"
