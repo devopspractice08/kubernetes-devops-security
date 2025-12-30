@@ -4,6 +4,7 @@ pipeline {
     stages {
         stage('Build Artifact - Maven') {
             steps {
+                // Keep CLEAN here to start fresh
                 sh 'mvn clean package -DskipTests=true'
                 archiveArtifacts 'target/*.jar'
             }
@@ -17,15 +18,16 @@ pipeline {
 
         stage('Mutation Tests - PIT') {
             steps {
+                // Do NOT use clean here
                 sh 'mvn org.pitest:pitest-maven:mutationCoverage'
             }
         }
 
         stage('SonarQube - SAST') {
             steps {
-                // Removed 'clean' here to preserve PIT and JaCoCo reports for Sonar analysis
+                // REMOVED 'clean' and 'verify' to protect the JAR and PIT reports
                 sh '''
-                    mvn verify sonar:sonar \
+                    mvn sonar:sonar \
                     -Dsonar.projectKey=numeric-application \
                     -Dsonar.host.url=http://3.108.200.102:9000 \
                     -Dsonar.login=sqp_f60bb81b6ffeeb7ffd83d5a782c18cdd6efd784b
@@ -52,8 +54,9 @@ pipeline {
         stage('Docker Build & Push') {
             steps {
                 withDockerRegistry([credentialsId: 'docker-hub', url: '']) {
-                    // Use --no-cache if you continue to see context issues
                     sh '''
+                        # Debug line to prove the file exists
+                        ls -l target/*.jar
                         docker build -t shaikh7/numeric-app:${GIT_COMMIT} .
                         docker push shaikh7/numeric-app:${GIT_COMMIT}
                     '''
@@ -79,8 +82,7 @@ pipeline {
             jacoco execPattern: 'target/jacoco.exec'
             pitmutation mutationStatsFile: '**/target/pit-reports/**/mutations.xml'
             dependencyCheckPublisher pattern: '**/dependency-check-report.xml'
-            
-            // Cleanup: Fixes the permission issue for the next run
+            // This fixes permission issues for the next run
             sh 'sudo chown -R jenkins:jenkins $WORKSPACE'
         }
     }
