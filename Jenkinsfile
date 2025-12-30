@@ -33,35 +33,32 @@ pipeline {
       }
     }
 
-   stage('Docker Build') {
-  steps {
-    sh "docker build -t shaikh7/numeric-app:${GIT_COMMIT} ."
-  }
-}
-
-stage('Vulnerability Scan - Docker') {
-  steps {
-    parallel(
-      'OWASP Dependency Scan': {
-        sh 'mvn dependency-check:check -DskipTests=true || true'
-      },
-      'Trivy Image Scan': {
-        sh '''
-          chmod +x trivy-docker-image-scan.sh
-          ./trivy-docker-image-scan.sh
-        '''
+    stage('Docker Build & Push') {
+      steps {
+        withDockerRegistry([credentialsId: 'docker-hub', url: '']) {
+          sh '''
+            docker build -t shaikh7/numeric-app:${GIT_COMMIT} .
+            docker push shaikh7/numeric-app:${GIT_COMMIT}
+          '''
+        }
       }
-    )
-  }
-}
-
-stage('Docker Push') {
-  steps {
-    withDockerRegistry([credentialsId: 'docker-hub', url: '']) {
-      sh "docker push shaikh7/numeric-app:${GIT_COMMIT}"
     }
-  }
-}
+
+    stage('Vulnerability Scan - Docker') {
+      steps {
+        parallel(
+          'Dependency Scan (OWASP)': {
+            sh 'mvn dependency-check:check -DskipTests=true || true'
+          },
+          'Trivy Image Scan': {
+            sh '''
+              chmod +x trivy-docker-image-scan.sh
+              ./trivy-docker-image-scan.sh shaikh7/numeric-app:${GIT_COMMIT} || true
+            '''
+          }
+        )
+      }
+    }
 
     stage('Kubernetes Deployment - DEV') {
       steps {
