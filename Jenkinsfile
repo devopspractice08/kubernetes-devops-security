@@ -41,8 +41,7 @@ pipeline {
           },
           'Trivy Image Scan': {
             sh '''
-              chmod +x trivy-docker-image-scan.sh
-              ./trivy-docker-image-scan.sh shaikh7/numeric-app:${GIT_COMMIT} || true
+              sh "bash trivy-docker-image-scan.sh"
             '''
           }
         )
