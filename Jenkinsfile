@@ -2,30 +2,31 @@ pipeline {
     agent any
 
     stages {
+        stage('Cleanup Workspace') {
+            steps {
+                // This ensures every build starts with a clean slate and no permission ghosts
+                sh 'sudo chown -R jenkins:jenkins $WORKSPACE'
+                sh 'rm -rf trivy target' 
+            }
+        }
+
         stage('Build Artifact - Maven') {
             steps {
-                // Keep CLEAN here to start fresh
                 sh 'mvn clean package -DskipTests=true'
-                archiveArtifacts 'target/*.jar'
             }
         }
 
-        stage('Unit Tests - JUnit & JaCoCo') {
+        stage('Unit Tests & PIT') {
+            // Combining these to save time and ensure reports stay put
             steps {
                 sh 'mvn test'
-            }
-        }
-
-        stage('Mutation Tests - PIT') {
-            steps {
-                // Do NOT use clean here
                 sh 'mvn org.pitest:pitest-maven:mutationCoverage'
             }
         }
 
         stage('SonarQube - SAST') {
             steps {
-                // REMOVED 'clean' and 'verify' to protect the JAR and PIT reports
+                // NO CLEAN here. Just analysis.
                 sh '''
                     mvn sonar:sonar \
                     -Dsonar.projectKey=numeric-application \
@@ -35,13 +36,13 @@ pipeline {
             }
         }
 
-        stage('Vulnerability Scan - Docker') {
+        stage('Vulnerability Scan') {
             steps {
                 parallel(
-                    'Dependency Scan (OWASP)': {
+                    'Dependency Scan': {
                         sh 'mvn dependency-check:check -DskipTests=true || true'
                     },
-                    'Trivy Image Scan': {
+                    'Trivy Scan': {
                         sh '''
                             chmod +x trivy-docker-image-scan.sh
                             ./trivy-docker-image-scan.sh shaikh7/numeric-app:${GIT_COMMIT} || true
@@ -55,8 +56,7 @@ pipeline {
             steps {
                 withDockerRegistry([credentialsId: 'docker-hub', url: '']) {
                     sh '''
-                        # Debug line to prove the file exists
-                        ls -l target/*.jar
+                        # The .dockerignore is critical here
                         docker build -t shaikh7/numeric-app:${GIT_COMMIT} .
                         docker push shaikh7/numeric-app:${GIT_COMMIT}
                     '''
@@ -64,7 +64,7 @@ pipeline {
             }
         }
 
-        stage('Kubernetes Deployment - DEV') {
+        stage('Kubernetes Deployment') {
             steps {
                 withCredentials([file(credentialsId: 'kubeconfig', variable: 'KUBECONFIG')]) {
                     sh '''
@@ -81,8 +81,7 @@ pipeline {
             junit 'target/surefire-reports/*.xml'
             jacoco execPattern: 'target/jacoco.exec'
             pitmutation mutationStatsFile: '**/target/pit-reports/**/mutations.xml'
-            dependencyCheckPublisher pattern: '**/dependency-check-report.xml'
-            // This fixes permission issues for the next run
+            // Clean up permissions at the end so the NEXT build doesn't fail
             sh 'sudo chown -R jenkins:jenkins $WORKSPACE'
         }
     }
