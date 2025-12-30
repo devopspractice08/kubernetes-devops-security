@@ -33,10 +33,16 @@ pipeline {
       }
     }
 
-   stage('Vulnerability Scan - Docker') {
+   stage('Docker Build') {
+  steps {
+    sh "docker build -t shaikh7/numeric-app:${GIT_COMMIT} ."
+  }
+}
+
+stage('Vulnerability Scan - Docker') {
   steps {
     parallel(
-      'Dependency Scan (OWASP)': {
+      'OWASP Dependency Scan': {
         sh 'mvn dependency-check:check -DskipTests=true || true'
       },
       'Trivy Image Scan': {
@@ -49,16 +55,13 @@ pipeline {
   }
 }
 
-    stage('Docker Build & Push') {
-      steps {
-        withDockerRegistry([credentialsId: 'docker-hub', url: '']) {
-          sh '''
-            docker build -t shaikh7/numeric-app:${GIT_COMMIT} .
-            docker push shaikh7/numeric-app:${GIT_COMMIT}
-          '''
-        }
-      }
+stage('Docker Push') {
+  steps {
+    withDockerRegistry([credentialsId: 'docker-hub', url: '']) {
+      sh "docker push shaikh7/numeric-app:${GIT_COMMIT}"
     }
+  }
+}
 
     stage('Kubernetes Deployment - DEV') {
       steps {
