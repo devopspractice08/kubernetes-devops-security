@@ -48,10 +48,10 @@ pipeline {
                             ./trivy-docker-image-scan.sh shaikh7/numeric-app:${GIT_COMMIT} || true
                         '''
                     },
-                    ,
-	 		       "OPA Conftest":{
-	 			     sh 'docker run --rm -v $(pwd):/project openpolicyagent/conftest test --policy opa-docker-security.rego Dockerfile'
-	 		       } 
+                    'OPA Conftest': {
+                        // Removed the extra comma and added --workdir
+                        sh 'docker run --rm -v $(pwd):/project -w /project openpolicyagent/conftest test --policy opa-docker-security.rego Dockerfile'
+                    }
                 )
             }
         }
