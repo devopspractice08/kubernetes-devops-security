@@ -34,20 +34,21 @@ pipeline {
     }
 
    stage('Vulnerability Scan - Docker') {
-      steps {
-        parallel(
-          'Dependency Scan (OWASP)': {
-            sh 'mvn dependency-check:check -DskipTests=true || true'
-          },
-          'Trivy Image Scan': {
-            sh '''
-              sh "chmod +x trivy-docker-image-scan.sh
-              ./trivy-docker-image-scan.sh"
-            '''
-          }
-        )
+  steps {
+    parallel(
+      'Dependency Scan (OWASP)': {
+        sh 'mvn dependency-check:check -DskipTests=true || true'
+      },
+      'Trivy Image Scan': {
+        sh '''
+          chmod +x trivy-docker-image-scan.sh
+          ./trivy-docker-image-scan.sh
+        '''
       }
-    }
+    )
+  }
+}
+
     stage('Docker Build & Push') {
       steps {
         withDockerRegistry([credentialsId: 'docker-hub', url: '']) {
