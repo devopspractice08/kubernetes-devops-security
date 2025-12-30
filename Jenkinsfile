@@ -41,7 +41,8 @@ pipeline {
           },
           'Trivy Image Scan': {
             sh '''
-              sh "bash trivy-docker-image-scan.sh"
+              sh "chmod +x trivy-docker-image-scan.sh
+              ./trivy-docker-image-scan.sh"
             '''
           }
         )
