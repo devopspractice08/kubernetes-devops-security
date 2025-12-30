@@ -1,3 +1,5 @@
-trivy*
-*.cache
-/tmp/
+trivy
+trivy/*
+.git
+.gitignore
+target/
