@@ -1,4 +1,5 @@
-trivy-cache/
-target/
-.git/
+trivy
+trivy-cache
+target
 *.sh
+.git
