@@ -13,11 +13,11 @@ deny[msg] if {
 	msg := sprintf("Line %d: Potential secret in ENV key: %s", [i, input[i].Value])
 }
 
-# 2. Trusted base images only (simple check)
+# 2. No 'latest' tags
 deny[msg] if {
 	input[i].Cmd == "from"
 	val := input[i].Value[0]
-	contains(val, "latest")
+	contains(val, ":latest")
 	msg := sprintf("Line %d: Do not use 'latest' tag for base images", [i])
 }
 
@@ -25,14 +25,13 @@ deny[msg] if {
 deny[msg] if {
 	input[i].Cmd == "run"
 	val := lower(concat(" ", input[i].Value))
-	matches := regex.find_all(`(curl|wget)[^ ]*`, val)
-	count(matches) > 0
+	# Using regex.match for better compatibility
+	regex.match(`(curl|wget)`, val)
 	msg := sprintf("Line %d: Avoid curl/wget in RUN", [i])
 }
 
 # 4. No system upgrades in RUN
 upgrade_cmds := ["apk upgrade", "apt-get upgrade", "dist-upgrade"]
-
 deny[msg] if {
 	input[i].Cmd == "run"
 	val := lower(concat(" ", input[i].Value))
@@ -53,6 +52,6 @@ any_user if {
 }
 
 deny[msg] if {
-    not any_user
-    msg := "Use USER to switch from root"
+	not any_user
+	msg := "Use USER to switch from root"
 }
