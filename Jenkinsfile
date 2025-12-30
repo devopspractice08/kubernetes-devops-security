@@ -47,7 +47,11 @@ pipeline {
                             chmod +x trivy-docker-image-scan.sh
                             ./trivy-docker-image-scan.sh shaikh7/numeric-app:${GIT_COMMIT} || true
                         '''
-                    }
+                    },
+                    ,
+	 		       "OPA Conftest":{
+	 			     sh 'docker run --rm -v $(pwd):/project openpolicyagent/conftest test --policy opa-docker-security.rego Dockerfile'
+	 		       } 
                 )
             }
         }
