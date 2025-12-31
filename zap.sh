@@ -1,38 +1,30 @@
 #!/bin/bash
 # zap.sh
 
-# 1. Get dynamic port and IP (consistent with your integration tests)
+# 1. Get dynamic port and IP
 PORT=$(kubectl -n default get svc ${serviceName} -o json | jq .spec.ports[].nodePort)
 IP_ADDR=$(echo $applicationURL | sed -e 's|^[^/]*//||' -e 's|[:/].*||')
 ZAP_URL="http://$IP_ADDR:$PORT$applicationURI"
 
 echo "ZAP is scanning: $ZAP_URL"
 
-# 2. Run ZAP using the new official GitHub Container Registry image
-# We mount the current directory to /zap/wrk so the report is saved to your workspace
-docker run --user $(id -u):$(id -g) --rm -v $(pwd):/zap/wrk/:rw \
+# 2. Run ZAP with fixed permissions and HOME directory
+# We add '-e HOME=/zap/wrk' so ZAP writes its config files in your workspace
+docker run --user $(id -u):$(id -g) \
+    -e HOME=/zap/wrk \
+    --rm -v $(pwd):/zap/wrk/:rw \
     ghcr.io/zaproxy/zaproxy:stable zap-baseline.py \
     -t $ZAP_URL \
     -r zap_report.html
 
 exit_code=$?
 
-# 3. Check if the report was actually created before trying to use it
+# 3. Check for report
 if [ -f "zap_report.html" ]; then
-    echo "ZAP scan finished successfully. Report generated."
+    echo "ZAP scan finished successfully."
 else
-    echo "ZAP scan failed to generate a report. Check if the URL is reachable."
+    echo "ZAP scan failed to generate a report."
     exit 1
 fi
 
-echo "Exit Code : $exit_code"
-
-# ZAP baseline returns 1 if it finds warnings, 0 if clean.
-# Usually, in DevSecOps, we allow 1 but fail on 2+ (errors).
-if [[ ${exit_code} -ge 2 ]]; then
-    echo "OWASP ZAP found significant security risks!"
-    exit 1
-else
-    echo "OWASP ZAP scan completed."
-    exit 0
-fi
+exit $exit_code
