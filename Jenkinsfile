@@ -41,18 +41,15 @@ pipeline {
 
         stage('SonarQube - SAST') {
             steps {
-                // Using the SonarQube environment defined in Jenkins global settings
-                withSonarQubeEnv('SonarQube') {
-                    sh """
-                        mvn sonar:sonar \
-                        -Dsonar.projectKey=numeric-application \
-                        -Dsonar.host.url=http://3.108.200.102:9000 \
-                        -Dsonar.login=sqp_f60bb81b6ffeeb7ffd83d5a782c18cdd6efd784b
-                    """
-                }
+                // We remove 'withSonarQubeEnv' and pass the details directly to Maven
+                sh """
+                    mvn sonar:sonar \
+                    -Dsonar.projectKey=numeric-application \
+                    -Dsonar.host.url=http://3.108.200.102:9000 \
+                    -Dsonar.login=sqp_f60bb81b6ffeeb7ffd83d5a782c18cdd6efd784b
+                """
             }
         }
-
         stage('Security Scans (Parallel)') {
             steps {
                 parallel(
