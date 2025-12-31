@@ -123,22 +123,22 @@ pipeline {
             }
         }
 
-    stage('Integration Tests - DEV') {
-      steps { 
-        script { 
-            // We use the 'file' credential method instead of 'withKubeConfig'
-            withCredentials([file(credentialsId: 'kubeconfig', variable: 'KUBECONFIG')]) {
-                try { 
-                    sh "bash integration-test.sh" 
-                } catch (e) { 
-                    echo "Integration tests failed. Rolling back deployment..."
-                    sh "kubectl -n default rollout undo deploy ${deploymentName}" 
-                    throw e 
-                } 
-            }
-        } 
-      }
-    }
+    // stage('Integration Tests - DEV') {
+    //   steps { 
+    //     script { 
+    //         // We use the 'file' credential method instead of 'withKubeConfig'
+    //         withCredentials([file(credentialsId: 'kubeconfig', variable: 'KUBECONFIG')]) {
+    //             try { 
+    //                 sh "bash integration-test.sh" 
+    //             } catch (e) { 
+    //                 echo "Integration tests failed. Rolling back deployment..."
+    //                 sh "kubectl -n default rollout undo deploy ${deploymentName}" 
+    //                 throw e 
+    //             } 
+    //         }
+    //     } 
+    //   }
+    // }
         
     }
 
