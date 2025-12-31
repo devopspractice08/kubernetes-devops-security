@@ -125,20 +125,20 @@ pipeline {
 
     stage('Integration Tests - DEV') {
       steps { 
-       script { 
-           try { 
-             withKubeConfig([credentialsId: 'kubeconfig']) { 
-               sh "bash integration-test.sh" 
-             } 
-           } catch (e) { 
-             withKubeConfig([credentialsId: 'kubeconfig']) { 
-               sh "kubectl -n default rollout undo deploy ${deploymentName}" 
-             } 
-            throw e 
-           } 
-         } 
-       } 
-     }
+        script { 
+            // We use the 'file' credential method instead of 'withKubeConfig'
+            withCredentials([file(credentialsId: 'kubeconfig', variable: 'KUBECONFIG')]) {
+                try { 
+                    sh "bash integration-test.sh" 
+                } catch (e) { 
+                    echo "Integration tests failed. Rolling back deployment..."
+                    sh "kubectl -n default rollout undo deploy ${deploymentName}" 
+                    throw e 
+                } 
+            }
+        } 
+      }
+    }
         
     }
 
