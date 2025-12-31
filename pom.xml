@@ -9,7 +9,7 @@
   <parent>
     <groupId>org.springframework.boot</groupId>
     <artifactId>spring-boot-starter-parent</artifactId>
-    <version>2.3.5.RELEASE</version>
+    <version>2.7.18</version>
     <relativePath/>
   </parent>
 
@@ -23,8 +23,10 @@
     <java.version>1.8</java.version>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
-    <tomcat.version>9.0.43</tomcat.version>
-    <spring-security.version>5.4.4</spring-security.version>
+    
+    <tomcat.version>9.0.83</tomcat.version>
+    <snakeyaml.version>2.0</snakeyaml.version>
+    <spring-security.version>5.7.11</spring-security.version>
   </properties>
 
   <dependencies>
@@ -47,18 +49,15 @@
 
   <build>
     <plugins>
-
-      <!-- Spring Boot -->
       <plugin>
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-maven-plugin</artifactId>
       </plugin>
 
-      <!-- JaCoCo -->
       <plugin>
         <groupId>org.jacoco</groupId>
         <artifactId>jacoco-maven-plugin</artifactId>
-        <version>0.8.10</version>
+        <version>0.8.11</version>
         <executions>
           <execution>
             <goals>
@@ -75,16 +74,15 @@
         </executions>
       </plugin>
 
-      <!-- PIT Mutation Testing -->
       <plugin>
         <groupId>org.pitest</groupId>
         <artifactId>pitest-maven</artifactId>
-        <version>1.5.0</version>
+        <version>1.15.3</version>
         <dependencies>
           <dependency>
             <groupId>org.pitest</groupId>
             <artifactId>pitest-junit5-plugin</artifactId>
-            <version>0.12</version>
+            <version>1.2.1</version>
           </dependency>
         </dependencies>
         <configuration>
@@ -96,32 +94,25 @@
         </configuration>
       </plugin>
 
-      <!-- SonarQube Plugin (REQUIRED) -->
       <plugin>
         <groupId>org.sonarsource.scanner.maven</groupId>
         <artifactId>sonar-maven-plugin</artifactId>
         <version>3.10.0.2594</version>
       </plugin>
 
-      <!-- OWASP Dependency Check (STABLE CI CONFIG) -->
       <plugin>
         <groupId>org.owasp</groupId>
         <artifactId>dependency-check-maven</artifactId>
-        <version>8.4.0</version>
+        <version>9.0.2</version>
         <configuration>
-          <!-- DO NOT FAIL PIPELINE -->
-          <failBuildOnCVSS>11</failBuildOnCVSS>
-
-          <!-- CRITICAL FIX: avoid NVD 403 -->
-          <autoUpdate>false</autoUpdate>
-
+          <failBuildOnCVSS>7</failBuildOnCVSS>
+          <autoUpdate>true</autoUpdate>
           <formats>
             <format>XML</format>
             <format>HTML</format>
           </formats>
         </configuration>
       </plugin>
-
     </plugins>
   </build>
 
