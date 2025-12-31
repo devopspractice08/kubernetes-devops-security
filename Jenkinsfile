@@ -80,17 +80,25 @@ pipeline {
         '''
       }
   }
-        stage('Kubernetes Deployment - DEV') {
-            steps {
-                withCredentials([file(credentialsId: 'kubeconfig', variable: 'KUBECONFIG')]) {
-                    sh '''
-                        sed -i "s#replace#shaikh7/numeric-app:${GIT_COMMIT}#g" k8s_deployment_service.yaml
-                        kubectl apply -f k8s_deployment_service.yaml
-                    '''
+        
+    stage('K8S Deployment - DEV') {
+    steps {
+        parallel(
+            Deployment: {
+                withKubeConfig([credentialsId: 'kubeconfig']) {
+                    sh 'bash k8s-deployment.sh'
+                }
+            },
+            Rollout_Status: {
+                withKubeConfig([credentialsId: 'kubeconfig']) {
+                    sh 'bash k8s-deployment-rollout-status.sh'
                 }
             }
-        }
+        )
     }
+}
+        
+}
 
     post {
         always {
