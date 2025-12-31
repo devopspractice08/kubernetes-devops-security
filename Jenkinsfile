@@ -6,7 +6,7 @@ pipeline {
         containerName  = 'devsecops-container'
         serviceName    = 'devsecops-svc'
         imageName      = "shaikh7/numeric-app:${GIT_COMMIT}" // Updated to your Docker ID
-        applicationURL = 'http://devsecops-demo.eastus.cloudapp.azure.com/'
+        applicationURL = 'http://3.108.200.102:32523/'
         applicationURI = '/increment/99'
     }
 
