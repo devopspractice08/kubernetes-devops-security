@@ -140,13 +140,13 @@ pipeline {
     //   }
     // }
 
-    stage('OWASP ZAP - DAST') {
+   stage('OWASP ZAP - DAST') {
     steps {
-        // Use the standard file credential method
         withCredentials([file(credentialsId: 'kubeconfig', variable: 'KUBECONFIG')]) {
             sh 'bash zap.sh'
         }
     }
+
 }
     }
 
@@ -155,7 +155,7 @@ pipeline {
             junit 'target/surefire-reports/*.xml'
             jacoco execPattern: 'target/jacoco.exec'
             pitmutation mutationStatsFile: '**/target/pit-reports/**/mutations.xml'
-            
+            archiveArtifacts artifacts: 'zap_report.html', allowEmptyArchive: true
             // Final cleanup of workspace permissions
             sh 'sudo chown -R jenkins:jenkins $WORKSPACE'
         }
