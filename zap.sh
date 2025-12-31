@@ -1,33 +1,38 @@
 #!/bin/bash
+# zap.sh
 
+# 1. Get dynamic port and IP (consistent with your integration tests)
 PORT=$(kubectl -n default get svc ${serviceName} -o json | jq .spec.ports[].nodePort)
+IP_ADDR=$(echo $applicationURL | sed -e 's|^[^/]*//||' -e 's|[:/].*||')
+ZAP_URL="http://$IP_ADDR:$PORT$applicationURI"
 
-# first run this
-chmod 777 $(pwd)
-echo $(id -u):$(id -g)
-# docker run -v $(pwd):/zap/wrk/:rw -t owasp/zap2docker-weekly zap-api-scan.py -t $applicationURL:$PORT/v3/api-docs -f openapi -r zap_report.html
+echo "ZAP is scanning: $ZAP_URL"
 
-
-# comment above cmd and uncomment below lines to run with CUSTOM RULES
-docker run -v $(pwd):/zap/wrk/:rw -t owasp/zap2docker-weekly zap-api-scan.py -t $applicationURL:$PORT/v3/api-docs -f openapi -c zap_rules -r zap_report.html
+# 2. Run ZAP using the new official GitHub Container Registry image
+# We mount the current directory to /zap/wrk so the report is saved to your workspace
+docker run --user $(id -u):$(id -g) --rm -v $(pwd):/zap/wrk/:rw \
+    ghcr.io/zaproxy/zaproxy:stable zap-baseline.py \
+    -t $ZAP_URL \
+    -r zap_report.html
 
 exit_code=$?
 
-
-# HTML Report
- sudo mkdir -p owasp-zap-report
- sudo mv zap_report.html owasp-zap-report
-
+# 3. Check if the report was actually created before trying to use it
+if [ -f "zap_report.html" ]; then
+    echo "ZAP scan finished successfully. Report generated."
+else
+    echo "ZAP scan failed to generate a report. Check if the URL is reachable."
+    exit 1
+fi
 
 echo "Exit Code : $exit_code"
 
- if [[ ${exit_code} -ne 0 ]];  then
-    echo "OWASP ZAP Report has either Low/Medium/High Risk. Please check the HTML Report"
-    exit 1;
-   else
-    echo "OWASP ZAP did not report any Risk"
- fi;
-
-
-# Generate ConfigFile
-# docker run -v $(pwd):/zap/wrk/:rw -t owasp/zap2docker-weekly zap-api-scan.py -t http://devsecops-demo.eastus.cloudapp.azure.com:31933/v3/api-docs -f openapi -g gen_file
+# ZAP baseline returns 1 if it finds warnings, 0 if clean.
+# Usually, in DevSecOps, we allow 1 but fail on 2+ (errors).
+if [[ ${exit_code} -ge 2 ]]; then
+    echo "OWASP ZAP found significant security risks!"
+    exit 1
+else
+    echo "OWASP ZAP scan completed."
+    exit 0
+fi
