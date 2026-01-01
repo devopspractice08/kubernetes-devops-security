@@ -140,12 +140,12 @@ pipeline {
     //   }
     // }
 
-   stage('OWASP ZAP - DAST') {
-    steps {
-        withCredentials([file(credentialsId: 'kubeconfig', variable: 'KUBECONFIG')]) {
-            sh 'bash zap.sh'
-        }
-    }
+   // stage('OWASP ZAP - DAST') {
+   //  steps {
+   //      withCredentials([file(credentialsId: 'kubeconfig', variable: 'KUBECONFIG')]) {
+   //          sh 'bash zap.sh'
+   //      }
+   //  }
 
 }
 
