@@ -131,16 +131,17 @@ pipeline {
 
         stage('K8S Deployment - PROD') {
             steps {
-                withKubeConfig([credentialsId: 'kubeconfig']) {
+                // CHANGED: Using withCredentials instead of withKubeConfig
+                withCredentials([file(credentialsId: 'kubeconfig', variable: 'KUBECONFIG')]) {
                     sh """
-                        sed -i 's#replace#${imageName}#g' k8s_PROD-deployment_service.yaml
+                        sed -i "s#replace#${imageName}#g" k8s_PROD-deployment_service.yaml
                         kubectl -n prod apply -f k8s_PROD-deployment_service.yaml
                         bash k8s-PROD-deployment-rollout-status.sh
                     """
                 }
             }
         }
-    } // End of Stages
+    }
 
     post {
         always {
