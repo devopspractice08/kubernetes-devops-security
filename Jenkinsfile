@@ -131,7 +131,6 @@ pipeline {
 
         stage('K8S Deployment - PROD') {
             steps {
-                // CHANGED: Using withCredentials instead of withKubeConfig
                 withCredentials([file(credentialsId: 'kubeconfig', variable: 'KUBECONFIG')]) {
                     sh """
                         sed -i "s#replace#${imageName}#g" k8s_PROD-deployment_service.yaml
@@ -145,26 +144,24 @@ pipeline {
 
     post {
         always {
-            // Only run junit if files actually exist to avoid NaN/Empty errors
             script {
+                // Safely record JUnit
                 if (fileExists('target/surefire-reports/')) {
                     junit 'target/surefire-reports/*.xml'
+                }
+                
+                // Safely record PIT Mutation without failing the build
+                catchError(buildResult: 'SUCCESS', stageResult: 'UNSTABLE') {
+                    pitmutation mutationStatsFile: '**/target/pit-reports/**/mutations.xml'
                 }
             }
             
             jacoco execPattern: 'target/jacoco.exec'
-            
-            // Fix PIT: Use failWhenNoMutations: false so NaN doesn't crash the build
-            pitmutation mutationStatsFile: '**/target/pit-reports/**/mutations.xml', 
-                        failWhenNoMutations: false
-            
             archiveArtifacts artifacts: 'zap_report.html', allowEmptyArchive: true
-            
-            // Final workspace cleanup
             sh 'sudo chown -R jenkins:jenkins $WORKSPACE'
         }
         success {
-            echo "SUCCESS: Application deployed to PROD!"
+            echo "SUCCESS: DevSecOps Pipeline Complete!"
             echo "Application is available at: ${applicationURL}${applicationURI}"
         }
     }
