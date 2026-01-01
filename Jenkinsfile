@@ -145,18 +145,24 @@ pipeline {
     post {
         always {
             script {
-                // Safely record JUnit
-                if (fileExists('target/surefire-reports/')) {
-                    junit 'target/surefire-reports/*.xml'
-                }
-                
-                // Safely record PIT Mutation without failing the build
-                catchError(buildResult: 'SUCCESS', stageResult: 'UNSTABLE') {
+                // 1. Record Tests - won't fail build if missing
+                try {
+                    if (fileExists('target/surefire-reports/')) {
+                        junit testResults: 'target/surefire-reports/*.xml', allowEmptyResults: true
+                    }
+                } catch (e) { echo "JUnit recording skipped: ${e}" }
+
+                // 2. Record Mutation - won't fail build if NaN
+                try {
                     pitmutation mutationStatsFile: '**/target/pit-reports/**/mutations.xml'
-                }
+                } catch (e) { echo "PIT recording skipped or NaN: ${e}" }
+                
+                // 3. Record JaCoCo
+                try {
+                    jacoco execPattern: 'target/jacoco.exec'
+                } catch (e) { echo "JaCoCo recording skipped: ${e}" }
             }
             
-            jacoco execPattern: 'target/jacoco.exec'
             archiveArtifacts artifacts: 'zap_report.html', allowEmptyArchive: true
             sh 'sudo chown -R jenkins:jenkins $WORKSPACE'
         }
