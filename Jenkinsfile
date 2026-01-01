@@ -210,4 +210,4 @@ pipeline {
             echo "Application is available at: ${applicationURL}${applicationURI}"
         }
     }
-}
+
